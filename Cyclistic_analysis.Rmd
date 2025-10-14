@@ -1,0 +1,618 @@
+---
+title: "Cyclistic_analysis"
+author: "Silvia"
+date: "2025-10-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Executive Summary
+
+This project analyzes bike trip data from Cyclistic, a bike-share company in Chicago with over 5,800 bikes and 600 docking stations. 
+
+I worked with data from Q1 2019 and Q1 2020 to understand the differences between two types of users:
+
+**My goal:** Find out how these two groups use bikes differently so the marketing team can create strategies to convert casual riders into annual members.
+
+By organizing and analyzing this data, I identified key patterns in:
+
+- Members take 91% of all rides but casual riders ride 3x longer per trip
+
+- Casual ridership peaks on weekends and in warmer months
+
+- Station usage differs: casual riders use tourist spots, members use business districts
+
+These insights will help Cyclistic design better marketing campaigns to encourage casual riders to become annual members.
+
+
+## 1. Introduction
+
+Cyclistic is a bike-share company based in Chicago. They launched in 2016 and have grown a lot since then. 
+
+##### Now they have:
+ - A total of 5,824 bikes
+ - A total of 692 docking stations across Chicago
+ - Different types of bikes (regular bikes, reclining bikes, hand tricycles, and cargo bikes)
+
+This makes their service accessible to more people, including those who can't use regular bikes.
+
+## 2. About Cyclistic
+
+##### Cyclistic offers flexible pricing options:
+- Single-ride passes
+- Full-day passes
+- Annual memberships
+
+People who buy single rides or day passes are called **casual riders**. People who buy annual memberships are called **members**.
+
+The company's finance team discovered that annual members are much more profitable than casual riders. So the marketing director, Lily Moreno, wants to focus on converting casual riders into members instead of trying to attract completely new customers.
+
+This makes sense because casual riders already know about Cyclistic and have used it before. They just need a reason to commit to a membership.
+
+## 3. My Task
+
+I need to answer this question: **How do annual members and casual riders use Cyclistic bikes differently?**
+
+Understanding these differences will help the marketing team create campaigns specifically designed to convince casual riders that a membership is worth it.
+
+## 4. Load and clean data
+
+### The Data I am Using
+
+To answer this question, I have two datasets from Cyclistic (which uses data from Divvy bikes):
+
+- **2019 Q1 data** - All bike trips from January through March 2019
+- **2020 Q1 data** - All bike trips from January through March 2020
+
+### These datasets include information about each bike trip:
+- When the trip started and ended 
+- Which stations were used (start and end) 
+- Whether the rider was a member or casual user 
+- How long the trip lasted 
+
+**Why Q1 data?** I'm using the first quarter (January-March) from two different years because this gives me enough data to find patterns without being too much to handle in RStudio.
+
+**What's NOT in the data:** For privacy reasons, the data doesn't include personal information like names, addresses, or payment details. This means I can't track individual riders or see things like age or gender.
+
+Even with these limitations, this data should give me enough information to spot the key differences between how members and casual riders use the bikes.
+
+### Load libraries
+
+```{r load-libraries}
+# Data manipulation and analysis
+library(tidyverse)   # includes dplyr, ggplot2, tidyr, etc.
+library(lubridate)   # for date-time manipulation
+
+```
+
+### Importing Data
+
+```{r import-data}
+# Import 2019 Q1 data
+trips_2019_q1 <- read_csv("data/Divvy_Trips_2019_Q1.csv")
+
+# Import 2020 Q1 data
+trips_2020_q1 <- read_csv("data/Divvy_Trips_2020_Q1.csv")
+```
+
+```{r}
+# Preview data structure 2019
+glimpse(trips_2019_q1)
+
+# Preview data structure 2020
+glimpse(trips_2020_q1)
+```
+
+
+## 5. Organizing and cleaning data
+
+### Rename columns
+
+```{r rename-columns}
+# Rename 2019 columns to match 2020 format
+trips_2019_q1 <- trips_2019_q1 %>%
+  rename(
+    ride_id = trip_id,
+    rideable_type = bikeid,
+    started_at = start_time,
+    ended_at = end_time,
+    start_station_name = from_station_name,
+    start_station_id = from_station_id,
+    end_station_name = to_station_name,
+    end_station_id = to_station_id,
+    member_casual = usertype
+  )
+
+# Check it worked
+colnames(trips_2019_q1)
+colnames(trips_2020_q1)
+
+```
+
+### Dropping Unnecessary Columns
+
+##### Some columns in the datasets don't help answer my research question. For example:
+
+- **Latitude/Longitude** - These are useful for mapping, but I'm not creating maps in this analysis
+- **Station IDs** - I already have station names, which are easier to read and understand
+
+### To keep my analysis focused and simpler, I decided to keep only the columns I actually need:
+
+- When trips started and ended
+- Which stations were used
+- Whether the rider was a member or casual user
+
+This makes the data easier to work with and helps me stay focused on answering my main question.
+
+```{r selects-columns}
+
+trips_2019_q1 <- trips_2019_q1 %>%
+  select(ride_id, started_at, ended_at, 
+         start_station_name, end_station_name, 
+         member_casual)
+
+trips_2020_q1 <- trips_2020_q1 %>%
+  select(ride_id, started_at, ended_at, 
+         start_station_name, end_station_name, 
+         member_casual)
+```
+
+### Fix Member Type Labels
+
+```{r fix-member_labels}
+# In 2019: "Subscriber" means member, "Customer" means casual
+# Change these to match 2020's labels
+trips_2019_q1 <- trips_2019_q1 %>%
+  mutate(member_casual = recode(member_casual,
+                                "Subscriber" = "member",
+                                "Customer" = "casual"))
+
+```
+### Check Data Types
+```{r check-types}
+# Check 2019 data types
+str(trips_2019_q1)
+
+# Check 2020 data types
+str(trips_2020_q1)
+```
+
+### Matching Data Types
+
+After checking both datasets, I noticed that most columns have matching data types. However, there's one issue:
+
+- In 2019: ride_id is stored as numeric (numbers)
+- In 2020: ride_id is stored as character (text)
+
+Before I can combine the datasets, both need to have the same data type. I'll convert the 2019 ride_id from numeric to character to match the 2020 format.
+
+
+
+```{r fix-ride-id}
+# Convert 2019 ride_id from number to text
+trips_2019_q1 <- trips_2019_q1 %>%
+  mutate(ride_id = as.character(ride_id))
+
+```
+### Check Date Formatting
+```{r check-dates}
+# Check the class/type of the date columns
+class(trips_2019_q1$started_at)
+class(trips_2020_q1$started_at)
+
+# Quick preview
+head(trips_2019_q1$started_at)
+head(trips_2020_q1$started_at)
+```
+
+### Combine Data
+
+```{r}
+all_trips <- bind_rows(trips_2019_q1, trips_2020_q1)
+
+# Check the combined dataset
+paste("Total trips:", nrow(all_trips))
+paste("2019 trips:", nrow(trips_2019_q1))
+paste("2020 trips:", nrow(trips_2020_q1))
+
+# Quick look at the combined data
+glimpse(all_trips)
+
+```
+
+### Check for Missing/Null Values (NAs)
+
+```{r check-missing}
+# Count missing values in each column
+colSums(is.na(all_trips))
+
+# Or see the total missing values
+sum(is.na(all_trips))
+
+```
+#### Removing missing value to be cleaner(One value will not affect thi analysis).
+
+```{r}
+all_trips <- all_trips %>%
+  filter(!is.na(end_station_name))
+```
+
+#### Checking duplicates
+
+```{r check-duplicates}
+# Count how many duplicate ride_ids exist
+sum(duplicated(all_trips$ride_id))
+
+# See which ride_ids are duplicated (if any)
+all_trips %>%
+  filter(duplicated(ride_id) | duplicated(ride_id, fromLast = TRUE)) %>%
+  arrange(ride_id)
+
+```
+
+
+### Adding columns
+Adding the columns needed for analysis:
+
+- *ride_length_mins* - How long each ride lasted (in minutes)
+- *day_of_week* - Which day (Monday, Tuesday, etc.)
+- *hour* - What time of day (0-23)
+
+```{r add-columns}
+# Add new columns
+all_trips <- all_trips %>%
+  mutate(
+    # Calculate ride length in minutes
+    ride_length_mins = as.numeric(difftime(ended_at, started_at, units = "mins")),
+    
+    # Get day of the week
+    day_of_week = wday(started_at, label = TRUE),
+    
+    # Get hour of day (0-23)
+    hour = hour(started_at),
+    
+    # Get month
+    month = month(started_at, label = TRUE)
+  )
+
+# Check it worked
+glimpse(all_trips)
+head(all_trips)
+
+```
+
+### Removing Bad Data
+
+```{r clean-bad-data}
+# Check the range of ride lengths before cleaning
+paste("Total trips:", nrow(all_trips))
+paste("Min ride length:", min(all_trips$ride_length_mins), "mins")
+paste("Max ride length:", max(all_trips$ride_length_mins), "mins")
+
+# Remove unrealistic rides
+all_trips_clean <- all_trips %>%
+  filter(
+    ride_length_mins >= 1,       # At least 1 minute
+    ride_length_mins < 1440       # Less than 24 hours (1440 mins)
+  )
+
+# Check after cleaning
+paste("Total trips:", nrow(all_trips_clean))
+paste("Removed:", nrow(all_trips) - nrow(all_trips_clean), "trips")
+paste("Min ride length:", min(all_trips_clean$ride_length_mins), "mins")
+paste("Max ride length:", max(all_trips_clean$ride_length_mins), "mins")
+
+```
+
+## 6. Analize data
+
+### **Step 1: Basic Comparison - Members vs Casual**
+
+```{r basic-comparison}
+# Total rides by user type
+all_trips_clean %>%
+  group_by(member_casual) %>%
+  summarise(
+    total_rides = n(),
+    percentage = round(n() / nrow(all_trips_clean) * 100, 1)
+  )
+
+# Average ride length by user type
+all_trips_clean %>%
+  group_by(member_casual) %>%
+  summarise(
+    avg_ride_length = round(mean(ride_length_mins), 2),
+    median_ride_length = round(median(ride_length_mins), 2),
+    max_ride_length = round(max(ride_length_mins), 2),
+    min_ride_length = round(min(ride_length_mins), 2)
+  )
+```
+#### **Key Findings**
+- *Who takes more trips?* Members take significantly more rides than casual riders (about 20x more!).
+- *Who rides longer on average?* Casual riders have much longer ride times (36-39 mins vs 11-12 mins).
+- *What this means:* These big differences show that members and casual riders use bikes for completely different purposes.
+
+### **Step 2: Day of Week Analysis**
+
+```{r day-analysis}
+# Rides by day of week
+day_summary <- all_trips_clean %>%
+  group_by(member_casual, day_of_week) %>%
+  summarise(
+    number_of_rides = n(),
+    avg_ride_length = round(mean(ride_length_mins), 2)
+  ) %>%
+  arrange(member_casual, day_of_week)
+
+# View the results
+day_summary
+```
+
+**What I Found:**
+
+- *Do casual riders ride more on weekends?* Yes! Casual riders show higher usage on weekends, which suggests they're using bikes for leisure activities and exploring the city.
+- *Do members ride consistently all week?* Yes! Members show consistent usage throughout the week, with higher numbers on weekdays. This indicates they're using Cyclistic as daily transportation, likely for commuting to work or running errands.
+- *Conclusion:* This pattern shows that casual riders use bikes for leisure and recreation, while members rely on bikes as their regular mode of transportation.
+
+### **Step 3: Monthly Trends**
+
+```{r month-analysis}
+# Rides by month
+month_summary <- all_trips_clean %>%
+  group_by(member_casual, month) %>%
+  summarise(
+    number_of_rides = n(),
+    avg_ride_length = round(mean(ride_length_mins), 2)
+  ) %>%
+  arrange(member_casual, month)
+
+# View the results
+month_summary
+```
+
+**What to look for:**
+- Which months are busiest for casual riders? March is the busiest month. As the temperature warms up, more people want to ride bikes for sightseeing and outdoor activities.
+- Do members ride consistently year-round? Yes, members show consistent ridership throughout Q1 with only small differences between months. This suggests they rely on bikes regardless of weather.
+- When should you launch marketing campaigns? Launch campaigns in early spring (February/March) to capture casual riders as weather improves and ridership increases.
+
+### **Step 4: Popular Stations**
+
+```{r station-analysis-casual}
+# Top 10 start stations for casual riders
+cat("Top 10 stations for CASUAL riders:\n")
+all_trips_clean %>%
+  filter(member_casual == "casual") %>%
+  group_by(start_station_name) %>%
+  summarise(rides = n()) %>%
+  arrange(desc(rides)) %>%
+  head(10)
+
+```
+
+```{r station-analysis-members}
+# Top 10 start stations for members
+cat("Top 10 stations for MEMBERS:\n")
+all_trips_clean %>%
+  filter(member_casual == "member") %>%
+  group_by(start_station_name) %>%
+  summarise(rides = n()) %>%
+  arrange(desc(rides)) %>%
+  head(10)
+```
+
+**What to look for:**
+  
+-Are casual rider stations near tourist spots? Yes! Casual riders start their trips at stations located in tourist areas and popular attractions.
+
+-Are member stations near offices/transit? Yes! Members primarily use stations near business districts and public transportation hubs.
+
+-What this means: Different locations confirm different user types. Casual riders are tourists or leisure users exploring the city, while members are local commuters using bikes for work and daily travel.
+
+## 7. Data Visualizations
+
+### Chart 1: Total Rides - Members vs Casual
+```{r viz-total-rides, fig.width=8, fig.height=5}
+# Create a simple bar chart comparing total rides
+all_trips_clean %>%
+  group_by(member_casual) %>%
+  summarise(total_rides = n()) %>%
+  ggplot(aes(x = member_casual, y = total_rides, fill = member_casual)) +
+  geom_col() +
+  geom_text(aes(label = scales::comma(total_rides)), 
+            vjust = -0.5, size = 3) +
+  scale_fill_manual(values = c("casual" = "#E69F00", "member" = "#56B4E9")) +
+  scale_y_continuous(labels = scales::comma) +
+  labs(
+    title = "Total Rides: Members vs Casual Riders",
+    subtitle = "Q1 2019 & Q1 2020",
+    x = "User Type",
+    y = "Number of Rides"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(size = 16, face = "bold"),
+    axis.text = element_text(size = 12)
+  )
+```
+
+### Chart 2: Average duration comparison
+
+```{r average_duration}
+all_trips_clean %>%
+  group_by(member_casual) %>%
+  summarise(avg_duration = mean(ride_length_mins)) %>%
+  ggplot(aes(x = member_casual, y = avg_duration, fill = member_casual)) +
+  geom_col() +
+  geom_text(aes(label = paste0(round(avg_duration, 1), " min")), 
+            vjust = -0.5, size = 3) +
+  scale_fill_manual(values = c("casual" = "#E69F00", "member" = "#56B4E9")) +
+  labs(
+    title = "Average Ride Duration: Members vs Casual Riders",
+    subtitle = "Q1 2019 & Q1 2020",
+    x = "User Type",
+    y = "Average Duration (minutes)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none",
+        plot.title = element_text(size = 16, face = "bold"))
+```
+
+### Chart 3: Rides by day of week
+
+```{r rides_weekday}
+all_trips_clean %>%
+  group_by(member_casual, day_of_week) %>%
+  summarise(number_of_rides = n()) %>%
+  ggplot(aes(x = day_of_week, y = number_of_rides, fill = member_casual)) +
+  geom_col(position = "dodge") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_fill_manual(values = c("casual" = "#E69F00", "member" = "#56B4E9")) +
+  labs(
+    title = "Number of Rides by Day of Week",
+    subtitle = "Members vs Casual Riders",
+    x = "Day of Week",
+    y = "Number of Rides",
+    fill = "User Type"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 16, face = "bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+### Chart 4: Average duration by day
+
+```{r avg_duration_daily}
+all_trips_clean %>%
+  group_by(member_casual, day_of_week) %>%
+  summarise(avg_duration = mean(ride_length_mins)) %>%
+  ggplot(aes(x = day_of_week, y = avg_duration, fill = member_casual)) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(values = c("casual" = "#E69F00", "member" = "#56B4E9")) +
+  labs(
+    title = "Average Ride Duration by Day of Week",
+    subtitle = "Members vs Casual Riders",
+    x = "Day of Week",
+    y = "Average Duration (minutes)",
+    fill = "User Type"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 16, face = "bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+### Chart 5: Rides by hour
+
+```{r rides_hourly}
+all_trips_clean %>%
+  group_by(member_casual, hour) %>%
+  summarise(number_of_rides = n()) %>%
+  ggplot(aes(x = hour, y = number_of_rides, color = member_casual, group = member_casual)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_continuous(breaks = seq(0, 23, 2)) +
+  scale_color_manual(values = c("casual" = "#E69F00", "member" = "#56B4E9")) +
+  labs(
+    title = "Hourly Usage Patterns",
+    subtitle = "Members vs Casual Riders",
+    x = "Hour of Day",
+    y = "Number of Rides",
+    color = "User Type"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 16, face = "bold"))
+```
+
+### Chart 6: Monthly rides
+
+```{r monthly_rides}
+all_trips_clean %>%
+  group_by(member_casual, month) %>%
+  summarise(number_of_rides = n()) %>%
+  ggplot(aes(x = month, y = number_of_rides, fill = member_casual)) +
+  geom_col(position = "dodge") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_fill_manual(values = c("casual" = "#E69F00", "member" = "#56B4E9")) +
+  facet_wrap(~ member_casual) +
+  labs(
+    title = "Monthly Ride Trends",
+    subtitle = "Q1 2019 vs Q1 2020",
+    x = "Month",
+    y = "Number of Rides",
+    fill = "User Type"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 16, face = "bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## 8. Key Findings
+
+#### Based on the analysys we can say that the key differences between members and casual riders:
+
+**Ride Frequency:**
+
+  - Members account for 91.4% of all rides (716,406 rides) while casual riders only 8.6% (67,397 rides)
+  
+  - Members take approximately 11 times more rides than casual users
+  
+**Ride Duration:**
+
+- Casual riders take significantly longer rides, averaging 38.5 minutes per trip
+
+- Members average only 11.5 minutes per trip
+
+- Casual riders ride 3.3 times longer than members, suggesting leisure vs. commute purposes
+
+**Day of Week Patterns:**
+
+- Casual riders peak on weekends (18,512 rides on Sunday, 13,399 on Saturday)
+
+- Members show consistent weekday usage with peaks on Tuesday and Wednesday (127,363 and 121,302 rides)
+
+- This confirms casual = leisure users, members = daily commuters
+
+**Time of Day Patterns:**
+
+- Members show clear morning and evening commute peaks (8 AM and 5-6 PM)
+
+- Casual riders have more evenly distributed usage throughout the day
+
+- This further confirms different usage purposes
+
+**Seasonal Patterns:**
+- Casual ridership triples from January to March (12,269 → 40,295 rides) as weather warms
+- Members stay relatively consistent across all three months
+- Casual riders are highly weather-dependent; members ride regardless of conditions
+
+## 9. Recommendations
+
+#### Based on the analysis, here top four recomendations for converting casual riders into annual members:
+
+- *Weekend Membership Promotion:* Our data shows casual riders peak on weekends (18,512 Sunday rides vs. 5,558 Monday rides). Create a 'Weekend Warrior' membership tier targeting these leisure riders. Emphasize unlimited weekend rides for one flat rate since casual riders already ride 3.3x longer than members.
+
+- *Members Incentive Program:* Develop marketing materials emphasizing cost savings for daily commuters. Show casual riders how much they could save with an annual membership if they commute just 2-3 days per week.
+
+- *Seasonal Conversion Campaign:* Launch membership campaigns at the start of peak seasons (spring/summer) when casual ridership increases. Offer discounted annual memberships to riders during their first few casual trips.
+
+- *Family discounts:* Create a campaign to share that the company support families, make discount for second or third members in the family.
+
+## 10. Conclusion
+
+#### This analysis successfully identified distinct usage patterns between Cyclistic annual members and casual riders. The insights gained provide a clear foundation for targeted marketing strategies aimed at converting casual riders into profitable annual members.
+
+*Next Steps*
+
+- Expand Analysis: Analyze a full year of data to understand seasonal variations
+
+- Geographic Analysis: Identify which stations have the highest casual rider traffic for targeted campaigns
+
+- A/B Testing: Test different marketing messages with casual riders
+
+- User Surveys: Conduct surveys to understand barriers to membership conversion
+

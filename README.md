@@ -34,6 +34,11 @@ The analysis uses Cyclistic trip data from 2019-2020:
 
 *Note: Cyclistic is a fictional company. The data is based on the real Divvy bike-share program in Chicago.*
 
+**Kaggle Dataset:** [Divvy Bikes Dataset](https://www.kaggle.com/datasets/divvy-bikeshare) *(if available on Kaggle)*
+
+Official source:
+**Data Source:** [Divvy Trip Data](https://divvy-tripdata.s3.amazonaws.com/index.html)
+
 ## 📁 Repository Structure
 
 ```

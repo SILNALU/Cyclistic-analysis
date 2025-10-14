@@ -21,6 +21,12 @@ tidyverse (dplyr, ggplot2, lubridate) - Data manipulation and visualization
 R Markdown - Reproducible reporting
 
 📊 Dataset
+
+**Data Files:**
+- Due to file size limitations, data files are not included in this repository
+- Download the original data: [Divvy Trip Data](https://divvy-tripdata.s3.amazonaws.com/index.html)
+- Files used: `Divvy_Trips_2019.csv`, `Divvy_Trips_2020_Q1.csv`
+  
 The analysis uses Cyclistic trip data from 2019-2020:
 
 Source: Divvy Trips historical data
@@ -88,7 +94,6 @@ Stakeholder communication
 Silvia Navío Luque
 
 📧 silvianavioluque@gmail.com
-💼 LinkedIn
 🌐 Portfolio: github.com/SILNALU
 
 📄 License
